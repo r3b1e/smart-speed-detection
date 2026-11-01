@@ -1,0 +1,34 @@
+{
+  "name": "@smart-speed/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zod schemas + TS types shared by server, bridge and web (serial protocol contract + API contracts)",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "tsup": "8.3.5",
+    "typescript": "5.6.3",
+    "vitest": "2.1.5"
+  }
+}
