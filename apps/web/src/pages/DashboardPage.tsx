@@ -27,6 +27,7 @@ import {
 } from "../components/charts";
 import { HealthStrip } from "../components/dashboard/HealthStrip";
 import { KpiCard } from "../components/dashboard/KpiCard";
+import { OverspeedEvidence } from "../components/dashboard/OverspeedEvidence";
 import { SpeedGauge } from "../components/dashboard/SpeedGauge";
 import { Ticker } from "../components/dashboard/Ticker";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
@@ -257,6 +258,8 @@ export function DashboardPage() {
         </div>
         <GaugePanel />
       </div>
+
+      <OverspeedEvidence />
 
       <HealthStrip />
       <ChartGrid />
