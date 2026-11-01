@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 173 80% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 88%;
+    --input: 214 32% 85%;
+    --ring: 199 89% 48%;
+    --ok: 160 84% 39%;
+    --warn: 43 96% 50%;
+    --danger: 350 89% 60%;
+  }
+
+  .dark {
+    --background: 222 47% 5%;
+    --foreground: 210 40% 96%;
+    --card: 222 43% 8%;
+    --card-foreground: 210 40% 96%;
+    --primary: 189 94% 50%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 217 33% 14%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 173 80% 45%;
+    --accent-foreground: 222 47% 8%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 33% 18%;
+    --input: 217 33% 22%;
+    --ring: 189 94% 50%;
+    --ok: 158 64% 52%;
+    --warn: 43 96% 56%;
+    --danger: 350 89% 63%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply rounded-xl border border-border/70 bg-card/70 shadow-lg shadow-black/5 backdrop-blur;
+  }
+
+  .dark .glass {
+    box-shadow:
+      0 0 0 1px hsl(var(--border) / 0.5),
+      0 8px 30px rgb(0 0 0 / 0.35);
+  }
+
+  .num {
+    @apply font-mono tabular-nums;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-muted;
+  }
+
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ---- leaflet dark-theme fixes ---- */
+.leaflet-container {
+  @apply h-full w-full bg-background font-sans;
+  outline: none;
+}
+
+.leaflet-popup-content-wrapper {
+  @apply rounded-lg border border-border bg-card text-card-foreground;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+}
+
+.leaflet-popup-content {
+  @apply m-0 text-sm;
+}
+
+.leaflet-popup-tip {
+  @apply bg-card;
+}
+
+.leaflet-bar a {
+  @apply bg-card text-foreground;
+}
+
+.ping-marker {
+  position: relative;
+}
+
+.ping-marker::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: hsl(var(--danger));
+  animation: pulse-ring 1.2s ease-out infinite;
+}
