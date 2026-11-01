@@ -89,7 +89,8 @@ serial line is counted as malformed by the bridge.
 {"t":"ack","cmd":"set_limit"}
 ```
 
-- `boot` is a random uint32 generated at MCU reset; `seq` restarts at 0 each
+- `boot` is a uint32 unique per MCU reset (EEPROM boot counter at address 0,
+  hashed and mixed with noise); `seq` restarts at 0 each
   boot, so `(bootId, seq)` is the idempotency key the server dedupes on
   (unique index `{deviceId, bootId, seq}`).
 - `dir`: `fwd` = sensor A fired before sensor B (vehicle crossed A → B),

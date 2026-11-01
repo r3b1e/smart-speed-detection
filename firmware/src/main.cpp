@@ -6,6 +6,7 @@
  * vehicle at 115200 baud, debug lines start with '#', nothing else.
  */
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 #include <stdlib.h>
@@ -18,7 +19,7 @@ static const uint8_t PIN_BUZZER = 13;  // wired to D13 on this build (onboard LE
 static const uint8_t LCD_ADDR = 0x27;  // try 0x3F if the LCD stays blank (see README)
 static const int IR_EDGE = FALLING;    // most IR modules are active-LOW; use RISING if nothing prints
 static const float GATE_DISTANCE_M = 0.10f;
-static const char *FW_VERSION = "1.2.0";
+static const char *FW_VERSION = "1.2.1";
 
 static const unsigned long DEBOUNCE_US = 2000UL;    // ignore re-triggers < 2 ms
 static const unsigned long TIMEOUT_US = 2000000UL;  // lone sensor resets after 2 s
@@ -325,6 +326,31 @@ static void heartbeatDue() {
   emitHeartbeat();
 }
 
+/**
+ * Unique id per power-on/reset. The server dedupes detections on
+ * (bootId, seq) and seq restarts at 0 every boot, so a repeated bootId would
+ * make the new boot's vehicles look like duplicates and be dropped.
+ * micros()/floating-pin noise alone repeated across resets, so a boot counter
+ * kept in EEPROM (incremented every boot) guarantees a fresh id; the noise is
+ * still mixed in so a re-flashed board (EEPROM may be kept) differs too.
+ */
+static const int EEPROM_BOOT_COUNTER_ADDR = 0;
+
+static uint32_t nextBootId() {
+  uint32_t counter = 0;
+  EEPROM.get(EEPROM_BOOT_COUNTER_ADDR, counter);
+  counter++;
+  EEPROM.put(EEPROM_BOOT_COUNTER_ADDR, counter); // ~1 write per boot; EEPROM lasts 100k cycles
+
+  uint32_t noise = micros();
+  for (uint8_t i = 0; i < 8; i++) noise = (noise << 3) ^ (uint32_t)analogRead(A0) ^ micros();
+  randomSeed(noise ^ counter);
+
+  // Knuth multiplicative hash spreads consecutive counters; xor in randomness
+  uint32_t id = (counter * 2654435761UL) ^ (((uint32_t)random(0x10000UL) << 16) | (uint32_t)random(0x10000UL));
+  return id == 0 ? 1 : id;
+}
+
 /* ---------------- Arduino entry points ---------------- */
 void setup() {
   Serial.begin(115200);
@@ -336,9 +362,7 @@ void setup() {
   lcd.init();
   lcd.backlight();
 
-  randomSeed((unsigned long)(micros() ^ ((unsigned long)analogRead(A0) << 10)));
-  bootId = ((uint32_t)random(0x10000UL) << 16) | (uint32_t)random(0x10000UL);
-  if (bootId == 0) bootId = 1;
+  bootId = nextBootId();
 
   emitHello(); // bridge pushes the server limit when it sees this line
 
