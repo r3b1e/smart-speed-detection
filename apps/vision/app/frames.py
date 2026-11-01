@@ -81,3 +81,118 @@ class YoloDetector:
             if not self._warned:
                 logger.warning("YOLO enabled but unavailable (%s); vehicle check disabled", exc)
                 self._warned = True
+
+# ---------------------------------------------------------------------------
+# Motion-based frame selection
+# ---------------------------------------------------------------------------
+# The bridge timestamp (second IR sensor) and the camera's frame timestamps
+# never line up exactly (USB/decoder latency, slow toy cars), so instead of
+# trusting "closest frame to eventTs - offset" we look at every frame around
+# the event and keep the one that differs most from the empty scene.
+
+_MOTION_WIDTH = 160  # analyse a small grey copy: fast and noise-tolerant
+
+
+def _small_grey(frame):
+    height, width = frame.shape[:2]
+    scale = _MOTION_WIDTH / width
+    small = cv2.resize(frame, (_MOTION_WIDTH, max(1, int(height * scale))), interpolation=cv2.INTER_AREA)
+    grey = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    return cv2.GaussianBlur(grey, (5, 5), 0)
+
+
+def background_of(frames: list) -> object | None:
+    """Median of a few frames: anything that only passed through briefly disappears."""
+    if not frames:
+        return None
+    import numpy as np
+
+    greys = [_small_grey(f) for f in frames]
+    return np.median(np.stack(greys), axis=0).astype("uint8")
+
+
+def _motion_mask(frame, background):
+    grey = _small_grey(frame)
+    if grey.shape != background.shape:
+        return None
+    diff = cv2.absdiff(grey, background)
+    _, mask = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+    return cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
+
+
+def _bbox_from_mask(mask, frame_shape):
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
+    height, width = frame_shape[:2]
+    scale = width / _MOTION_WIDTH
+    pad = 6
+    return (
+        max(0, int((x - pad) * scale)),
+        max(0, int((y - pad) * scale)),
+        min(width - 1, int((x + w + pad) * scale)),
+        min(height - 1, int((y + h + pad) * scale)),
+    )
+
+
+def sharpness(frame, bbox) -> float:
+    """Variance of the Laplacian inside bbox: higher = crisper edges, less motion blur."""
+    x1, y1, x2, y2 = bbox
+    crop = frame[y1 : y2 + 1, x1 : x2 + 1]
+    if crop.size == 0:
+        return 0.0
+    grey = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    return float(cv2.Laplacian(grey, cv2.CV_64F).var())
+
+
+def pick_motion_frame(
+    candidates: list,
+    background,
+    min_fraction: float = 0.003,
+    presence_ratio: float = 0.5,
+):
+    """Return (index, bbox | None, changed_fraction) of the best vehicle frame.
+
+    *candidates* are BGR frames, *background* comes from ``background_of``.
+    Every frame where the moving object covers at least *presence_ratio* of
+    the largest change seen (i.e. the vehicle is substantially in view) is a
+    contender; of those, the SHARPEST one inside its motion box wins — the
+    frame with the most change is usually the closest and most blurred.
+    bbox is (x1, y1, x2, y2) in full-frame pixels around the biggest moving
+    blob. Returns (None, None, best_fraction) when nothing moved more than
+    *min_fraction* of the picture (caller falls back to time-based choice).
+    """
+    if background is None or not candidates:
+        return None, None, 0.0
+    scored = []
+    for i, frame in enumerate(candidates):
+        mask = _motion_mask(frame, background)
+        if mask is None:
+            continue
+        scored.append((i, float(cv2.countNonZero(mask)) / mask.size, mask))
+    best_score = max((sc for _, sc, _ in scored), default=0.0)
+    if best_score < min_fraction:
+        return None, None, best_score
+
+    threshold = max(min_fraction, best_score * presence_ratio)
+    chosen = None  # (sharpness, index, bbox, score)
+    for i, score, mask in scored:
+        if score < threshold:
+            continue
+        bbox = _bbox_from_mask(mask, candidates[i].shape)
+        if bbox is None:
+            continue
+        sharp = sharpness(candidates[i], bbox)
+        if chosen is None or sharp > chosen[0]:
+            chosen = (sharp, i, bbox, score)
+    if chosen is None:
+        return None, None, best_score
+    _, index, bbox, score = chosen
+    return index, bbox, score
+
+
+def draw_motion_box(frame, bbox) -> None:
+    x1, y1, x2, y2 = bbox
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (60, 60, 255), 3)
+    cv2.putText(frame, "VEHICLE", (x1, max(18, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (60, 60, 255), 2, cv2.LINE_AA)

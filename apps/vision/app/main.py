@@ -19,7 +19,15 @@ from . import __version__
 from .capture import CaptureWorker, CameraState, HeartbeatWorker
 from .camera import LiveCamera
 from .config import Config, load as load_config
-from .frames import YoloDetector, encode_jpeg, make_thumbnail, overlay_caption
+from .frames import (
+    YoloDetector,
+    background_of,
+    draw_motion_box,
+    encode_jpeg,
+    make_thumbnail,
+    overlay_caption,
+    pick_motion_frame,
+)
 from .log import setup_logging
 from .ring import RingBuffer
 from .stats import Stats
@@ -27,7 +35,7 @@ from .uploader import UploadError, Uploader
 
 BOUNDARY = "frame"
 
-RING_FPS = 15
+RING_FPS = 15  # MJPEG preview rate (the ring itself is sized by cfg.ring_fps)
 
 
 async def mjpeg_frames(ring: RingBuffer, cfg: Config) -> AsyncIterator[bytes]:
@@ -86,7 +94,7 @@ def create_app(
             camera_type = LiveCamera
     logger = setup_logging(cfg)
     stats = Stats()
-    ring = RingBuffer(max(1, int(cfg.ring_seconds * RING_FPS)))
+    ring = RingBuffer(max(1, int(cfg.ring_seconds * cfg.ring_fps)))
     up = uploader or Uploader(cfg)
     yolo = YoloDetector(cfg.enable_yolo, cfg.yolo_classes)
     capture: CaptureWorker | None = None
@@ -148,15 +156,53 @@ def create_app(
             "version": __version__,
         }
 
+    async def _motion_pick(event: float):
+        """Wait until frames after the event exist, then pick the one with most motion."""
+        after = cfg.motion_after_ms / 1000.0
+        before = cfg.motion_before_ms / 1000.0
+        deadline = time.monotonic() + after + 1.0
+        while time.monotonic() < deadline:
+            latest = ring.latest()
+            if latest is not None and latest.wall_seconds >= event + after:
+                break
+            await asyncio.sleep(0.05)
+        candidates = ring.window(event - before, event + after)
+        reference = ring.window(event - before - 1.0, event - before)
+        if not candidates or not reference:
+            return None, None
+        # keep at most 5 evenly spaced reference frames for the median background
+        step = max(1, len(reference) // 5)
+        background = await asyncio.to_thread(background_of, [e.frame for e in reference[::step]])
+        index, bbox, score = await asyncio.to_thread(
+            pick_motion_frame, [e.frame for e in candidates], background
+        )
+        if index is None:
+            services.logger.info("capture: no motion found (max %.2f%% changed), using time match", score * 100)
+            return None, None
+        services.logger.info(
+            "capture: motion frame %+.0f ms from event (%.1f%% changed)",
+            (candidates[index].wall_seconds - event) * 1000.0,
+            score * 100,
+        )
+        return candidates[index], bbox
+
     @app.post("/capture")
     async def capture(body: CaptureRequest, request: Request) -> dict:
         _check_vision_secret(request, cfg)
-        target = body.eventTs.timestamp() - body.offsetMs / 1000.0
-        entry = ring.closest(target, cfg.frame_tolerance_ms)
+        event = body.eventTs.timestamp()
+        entry = None
+        motion_box = None
+        if cfg.capture_mode == "motion":
+            entry, motion_box = await _motion_pick(event)
+        if entry is None:
+            target = event - body.offsetMs / 1000.0
+            entry = ring.closest(target, cfg.frame_tolerance_ms)
         if entry is None:
             services.logger.info("capture miss for %s (no frame within %.0f ms)", body.detectionId, cfg.frame_tolerance_ms)
             return {"status": "failed", "reason": "no frame within window"}
         frame = entry.frame.copy()
+        if motion_box is not None:
+            draw_motion_box(frame, motion_box)
         confirmed, boxes = services.yolo.confirm(frame)
         if not confirmed:
             return {"status": "failed", "reason": "no vehicle confirmed in frame"}
@@ -164,7 +210,9 @@ def create_app(
             services.yolo.draw_boxes(frame, boxes)
         if cfg.overlay_caption:
             local = dt.datetime.fromtimestamp(entry.wall_seconds)
-            overlay_caption(frame, f"SmartSpeed {local.strftime('%Y-%m-%d %H:%M:%S')} | +{body.offsetMs}ms")
+            delta_ms = (entry.wall_seconds - event) * 1000.0
+            how = "motion" if motion_box is not None else "time"
+            overlay_caption(frame, f"SmartSpeed {local.strftime('%Y-%m-%d %H:%M:%S')} | {delta_ms:+.0f}ms ({how})")
         jpeg = encode_jpeg(frame, cfg.jpeg_quality)
         thumb = make_thumbnail(frame, cfg.thumb_width)
         try:

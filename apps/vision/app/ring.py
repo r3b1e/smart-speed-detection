@@ -57,6 +57,13 @@ class RingBuffer:
                 return None
             return best
 
+    def window(self, start_wall_seconds: float, end_wall_seconds: float) -> list[FrameEntry]:
+        """Snapshot of frames whose wall-clock time is within [start, end], oldest first."""
+        with self._lock:
+            return [
+                e for e in self._entries if start_wall_seconds <= e.wall_seconds <= end_wall_seconds
+            ]
+
     def latest(self) -> FrameEntry | None:
         with self._lock:
             if not self._entries:

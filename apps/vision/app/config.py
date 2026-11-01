@@ -59,6 +59,12 @@ class Config:
     max_frame_read_ms: int
     request_timeout_s: float
     yolo_classes: tuple[str, ...] = field(default_factory=tuple)
+    # "motion": pick the frame around the event that differs most from the empty
+    # scene (robust to timing offsets); "closest": nearest frame to eventTs - offset.
+    capture_mode: str = "motion"
+    ring_fps: int = 15  # camera frames/s the ring must hold (capacity = ring_seconds * ring_fps)
+    motion_before_ms: int = 800
+    motion_after_ms: int = 700
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -117,4 +123,8 @@ def load() -> Config:
         max_frame_read_ms=_env_int("MAX_FRAME_READ_MS", 2500),
         request_timeout_s=_env_float("REQUEST_TIMEOUT_S", 8.0),
         yolo_classes=yolo_classes,
+        capture_mode=_env("CAPTURE_MODE", "motion").lower(),
+        ring_fps=_env_int("RING_FPS", 15),
+        motion_before_ms=_env_int("MOTION_BEFORE_MS", 800),
+        motion_after_ms=_env_int("MOTION_AFTER_MS", 700),
     )
