@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+coverage
+pnpm-lock.yaml
+*.min.js
+*.map
+apps/web/dist
+apps/vision/.venv
+playwright-report
+test-results
+prompt.md
+.pio

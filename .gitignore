@@ -1,0 +1,51 @@
+# ── dependencies & build output ───────────────────────────────────────────────
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.pnpm-store/
+
+# ── env / secrets (only the *.env.example templates are committed) ───────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── python (vision service) ──────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── runtime data: local MongoDB (incl. captured photos), bridge queue ────────
+.data/
+*.log
+logs/
+
+# ── camera / debug captures made while testing ────────────────────────────────
+captures/
+*.h264
+*.mkv
+*.mjpg
+
+# ── firmware ──────────────────────────────────────────────────────────────────
+.pio/
+# raw flash dumps (e.g. the backup of the board's original sketch) — keep locally
+*.bin
+*.hex
+
+# ── test reports ──────────────────────────────────────────────────────────────
+playwright-report/
+test-results/
+
+# ── editors / OS / tools ──────────────────────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+*.swp
+.claude/

@@ -1,0 +1,74 @@
+name: smart-speed
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: ssd-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mongo-express:
+    image: mongo-express:1.0.2-20
+    container_name: ssd-mongo-express
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    profiles: ["tools"]
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: ssd-server
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      MONGODB_URI: mongodb://mongo:27017/smart-speed
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set in .env}
+      JWT_LIFETIME_MINUTES: "15"
+      JWT_REFRESH_DAYS: "7"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173}
+      VISION_URL: ${VISION_URL:-http://vision:8001}
+      VISION_SHARED_SECRET: ${VISION_SHARED_SECRET:?set in .env}
+      PUBLIC_SERVER_URL: ${PUBLIC_SERVER_URL:-http://localhost:4000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+  # Bridge and vision run on the HOST (they need USB / Continuity Camera access),
+  # not in Docker. See README run order.
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: ssd-web
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "4173:80"
+    environment:
+      VITE_API_BASE: ${VITE_API_BASE:-/api}
+
+volumes:
+  mongo_data:

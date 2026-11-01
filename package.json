@@ -1,0 +1,39 @@
+{
+  "name": "smart-speed-detection",
+  "private": true,
+  "version": "1.0.0",
+  "description": "IoT vehicle speed detection: IR gate -> Arduino -> bridge -> server -> real-time dashboard with vision snapshots",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "build": "pnpm --filter @smart-speed/shared build",
+    "dev": "pnpm --filter @smart-speed/shared build && concurrently -n server,web -c cyan,magenta \"pnpm --filter @smart-speed/server dev\" \"pnpm --filter @smart-speed/web dev\"",
+    "dev:server": "pnpm --filter @smart-speed/shared build && pnpm --filter @smart-speed/server dev",
+    "dev:bridge": "pnpm --filter @smart-speed/bridge dev",
+    "dev:vision": "bash scripts/dev-vision.sh",
+    "dev:mongo": "node scripts/dev-mongo.mjs",
+    "seed": "pnpm --filter @smart-speed/shared build && pnpm --filter @smart-speed/server seed",
+    "test": "pnpm --filter @smart-speed/shared test && pnpm --filter @smart-speed/server test && pnpm --filter @smart-speed/bridge test && pnpm test:vision && pnpm --filter @smart-speed/web test",
+    "test:vision": "cd apps/vision && (test -x .venv/bin/pytest && .venv/bin/pytest || echo \"[vision] venv missing — see apps/vision/README (python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt)\")",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "eslint . --fix && prettier --write .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm --filter @smart-speed/shared typecheck && pnpm --filter @smart-speed/server typecheck && pnpm --filter @smart-speed/bridge typecheck && pnpm --filter @smart-speed/web typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "concurrently": "9.1.0",
+    "eslint": "9.39.5",
+    "eslint-config-prettier": "9.1.0",
+    "globals": "15.12.0",
+    "mongodb-memory-server": "10.1.2",
+    "prettier": "3.3.3",
+    "typescript": "5.6.3",
+    "typescript-eslint": "8.71.1"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts"
+}
