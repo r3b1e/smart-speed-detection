@@ -18,7 +18,7 @@ static const uint8_t PIN_BUZZER = 13;  // wired to D13 on this build (onboard LE
 static const uint8_t LCD_ADDR = 0x27;  // try 0x3F if the LCD stays blank (see README)
 static const int IR_EDGE = FALLING;    // most IR modules are active-LOW; use RISING if nothing prints
 static const float GATE_DISTANCE_M = 0.10f;
-static const char *FW_VERSION = "1.1.0";
+static const char *FW_VERSION = "1.2.0";
 
 static const unsigned long DEBOUNCE_US = 2000UL;    // ignore re-triggers < 2 ms
 static const unsigned long TIMEOUT_US = 2000000UL;  // lone sensor resets after 2 s
@@ -28,6 +28,8 @@ static const int BEEP_COUNT = 3;
 static const unsigned long MIN_DT_US = 361UL;       // keeps speed_kmh <= 999 (schema max)
 static const float MIN_LIMIT_KMH = 0.1f;            // calibrated raw gate-speed threshold
 static const float MAX_LIMIT_KMH = 200.0f;
+static const float MIN_SCALE = 0.01f;               // station scale factor (toy -> real world)
+static const float MAX_SCALE = 1000.0f;
 
 /* ---------------- state ---------------- */
 LiquidCrystal_I2C lcd(LCD_ADDR, 16, 2);
@@ -36,7 +38,8 @@ volatile unsigned long edgeA = 0, edgeB = 0; // last ACCEPTED edge times (micros
 volatile bool fA = false, fB = false;        // sensor fired, waiting for its partner
 volatile bool fwdDir = true;                 // set when the SECOND sensor fires
 
-float limitKmh = 40.0f;
+float limitKmh = 40.0f;   // raw gate trip limit (server limit / scale)
+float scaleFactor = 1.0f; // pushed with set_limit; LCD shows speed x scale
 uint32_t bootId = 0;
 unsigned long seq = 0;
 unsigned long lastHbMs = 0;
@@ -139,12 +142,37 @@ static void lcdResync() {
   lcd.backlight();
 }
 
+/** "48.0km/h (4.8)" = scaled (what the dashboard shows) + raw gate speed. */
+static void speedLine(char *out) {
+  char rawTxt[12];
+  dtostrf(lastSpeedKmh, 0, 1, rawTxt);
+  if (scaleFactor == 1.0f) {
+    snprintf(out, 17, "Speed:%skm/h", rawTxt);
+    return;
+  }
+  char scaledTxt[12];
+  const float scaled = lastSpeedKmh * scaleFactor;
+  dtostrf(scaled, 0, scaled < 100.0f ? 1 : 0, scaledTxt);
+  snprintf(out, 17, "%skm/h (%s)", scaledTxt, rawTxt);
+}
+
+/** "Limit:40km/h x10" = the real-world limit the server uses + scale factor. */
+static void limitLine(char *out) {
+  char limitTxt[12];
+  dtostrf(limitKmh * scaleFactor, 0, 0, limitTxt);
+  if (scaleFactor == 1.0f) {
+    snprintf(out, 17, "Limit:%s km/h", limitTxt);
+    return;
+  }
+  char scaleTxt[12];
+  dtostrf(scaleFactor, 0, scaleFactor == (float)(long)scaleFactor ? 0 : 1, scaleTxt);
+  snprintf(out, 17, "Limit:%skm/h x%s", limitTxt, scaleTxt);
+}
+
 static void renderLcd() {
-  char speedTxt[12];
   char line[17];
   lcdResync();
-  dtostrf(lastSpeedKmh, 0, 1, speedTxt);
-  snprintf(line, sizeof(line), "Speed:%skm/h", speedTxt);
+  speedLine(line);
   writeLine(0, line);
   statusLine(lastStatus, line);
   writeLine(1, line);
@@ -157,22 +185,17 @@ static void showTestPattern() {
 }
 
 static void showBootScreen() {
-  char title[17];
-  snprintf(title, sizeof(title), "SmartSpeed %s", FW_VERSION);
-  writeLine(0, title);
-  char speedTxt[12];
   char line[17];
-  dtostrf(limitKmh, 0, 0, speedTxt);
-  snprintf(line, sizeof(line), "GateLim:%s km/h", speedTxt);
+  snprintf(line, sizeof(line), "SmartSpeed %s", FW_VERSION);
+  writeLine(0, line);
+  limitLine(line);
   writeLine(1, line);
 }
 
 /** After a set_limit command the LCD shows the new limit until the next vehicle. */
 static void showLimitChanged() {
-  char limitTxt[12];
   char line[17];
-  dtostrf(limitKmh, 0, 0, limitTxt);
-  snprintf(line, sizeof(line), "GateLim:%s km/h", limitTxt);
+  limitLine(line);
   writeLine(1, line);
 }
 
@@ -206,6 +229,11 @@ static void handleCommand() {
     const float v = (p != NULL) ? (float)atof(p + 6) : -1.0f;
     if (v >= MIN_LIMIT_KMH && v <= MAX_LIMIT_KMH) {
       limitKmh = v;
+      const char *ps = strstr(cmdBuf, "\"scale\":"); // optional
+      if (ps != NULL) {
+        const float sc = (float)atof(ps + 8);
+        if (sc >= MIN_SCALE && sc <= MAX_SCALE) scaleFactor = sc;
+      }
       emitAck("set_limit");
       showLimitChanged();
     } else {

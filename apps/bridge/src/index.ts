@@ -37,7 +37,10 @@ async function main(): Promise<void> {
       .getDevice()
       .then((device) => {
         bridge.setDeviceId(device.id);
-        bridge.setDesiredLimit(gateTripLimitKmh(device.speedLimitKmh, device.scaleFactor));
+        bridge.setDesiredLimit(
+          gateTripLimitKmh(device.speedLimitKmh, device.scaleFactor),
+          device.scaleFactor
+        );
         logger.info({ device: device.name, limit: device.speedLimitKmh }, "station resolved");
       })
       .catch(() => {

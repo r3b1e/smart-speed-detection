@@ -300,6 +300,36 @@ describe("bridge pipeline (Arduino serial -> queue -> HTTP)", () => {
     }
   });
 
+  it("sends the station scale factor with set_limit so the LCD can show scaled speed", async () => {
+    const source = new FakeSource();
+    const config = testConfig(join(dir, "q.jsonl"));
+    const client = createServerClient(mock.url, config.deviceApiKey);
+    const bridge = new Bridge({
+      config,
+      logger,
+      source,
+      client,
+      deviceId: null,
+      desiredLimitKmh: null,
+    });
+    await bridge.start();
+    try {
+      bridge.setDesiredLimit(4, 10); // server limit 40 km/h, scale x10
+      source.emit(JSON.stringify({ t: "hello", fw: "1.2.0", limit: 40, boot: 9 }));
+      await waitFor(() => source.written.length >= 1, "set_limit pushed on hello");
+      expect(source.written[0]).toEqual({ cmd: "set_limit", kmh: 4, scale: 10 });
+
+      // an admin change from the server updates what is re-pushed on the next reboot
+      bridge.handleCommand({ cmd: "set_limit", kmh: 5, scale: 8 });
+      expect(source.written.at(-1)).toEqual({ cmd: "set_limit", kmh: 5, scale: 8 });
+      source.emit(JSON.stringify({ t: "hello", fw: "1.2.0", limit: 40, boot: 10 }));
+      await waitFor(() => source.written.length >= 3, "re-pushed after reboot");
+      expect(source.written.at(-1)).toEqual({ cmd: "set_limit", kmh: 5, scale: 8 });
+    } finally {
+      await bridge.stop();
+    }
+  });
+
   it("omits absent serial metadata from disconnected heartbeats", async () => {
     const source = new FakeSource();
     source.disconnect();

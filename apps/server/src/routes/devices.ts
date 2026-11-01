@@ -167,6 +167,7 @@ devicesRouter.patch(
       sockets.deviceCommand(device.id, {
         cmd: "set_limit",
         kmh: gateTripLimitKmh(device.speedLimitKmh, device.scaleFactor),
+        scale: device.scaleFactor,
       });
     }
     await audit({

@@ -38,11 +38,12 @@ copy of that contract — change both together.**
   `0x3F` and turn the contrast pot on the LCD backpack.
 - LCD screens: at power-on a **test pattern** for 2 s
   (`0123456789ABCDEF` / `abcdefghij:./#!?`), then `SmartSpeed <fw>` +
-  the gate limit, then per vehicle:
+  `Limit:40km/h x10` (real-world limit and scale factor), then per vehicle:
   ```
-  Speed:4.8km/h          <- raw gate speed (the dashboard shows it x scale factor)
+  48.0km/h (4.8)         <- scaled speed, same as the dashboard (raw gate speed)
   OVERSPEED!   #12       <- OK / OVERSPEED! + vehicles counted since power-on
   ```
+  With scale factor 1 line 1 is simply `Speed:4.8km/h`.
   The LCD is re-initialised before every redraw so a glitched transfer can't
   leave it showing garbage.
 - The buzzer needs its (+) on D13 and (−) on GND (this build — the onboard LED
@@ -99,11 +100,11 @@ serial line is counted as malformed by the bridge.
 
 ### Bridge → device
 
-| Command                       | Effect                                                                    | Ack                               |
-| ----------------------------- | ------------------------------------------------------------------------- | --------------------------------- |
-| `{"cmd":"set_limit","kmh":6}` | sets the calibrated raw gate trip threshold (0.1..200 km/h), LCD shows it | `{"t":"ack","cmd":"set_limit"}`   |
-| `{"cmd":"buzzer_test"}`       | 3 beeps                                                                   | `{"t":"ack","cmd":"buzzer_test"}` |
-| `{"cmd":"ping"}`              | none                                                                      | `{"t":"ack","cmd":"ping"}`        |
+| Command                                  | Effect                                                                                                                                  | Ack                               |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `{"cmd":"set_limit","kmh":6,"scale":10}` | sets the raw gate trip threshold (0.1..200 km/h) and, optionally, the station scale factor (0.01..1000) used for the LCD's scaled speed | `{"t":"ack","cmd":"set_limit"}`   |
+| `{"cmd":"buzzer_test"}`                  | 3 beeps                                                                                                                                 | `{"t":"ack","cmd":"buzzer_test"}` |
+| `{"cmd":"ping"}`                         | none                                                                                                                                    | `{"t":"ack","cmd":"ping"}`        |
 
 Out-of-range or unknown commands print `# ...` debug and get **no ack**.
 The bridge pushes `server speed limit / scale factor` on every (re)connect

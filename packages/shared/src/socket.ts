@@ -59,7 +59,11 @@ export type DetectionFramePayload = z.infer<typeof DetectionFrameSchema>;
 export const DeviceCommandPayloadSchema = z.object({
   deviceId: z.string(),
   command: z.discriminatedUnion("cmd", [
-    z.object({ cmd: z.literal("set_limit"), kmh: z.number().min(5).max(200) }),
+    z.object({
+      cmd: z.literal("set_limit"),
+      kmh: z.number().min(5).max(200),
+      scale: z.number().min(0.01).max(1000).optional(),
+    }),
     z.object({ cmd: z.literal("buzzer_test") }),
     z.object({ cmd: z.literal("ping") }),
   ]),

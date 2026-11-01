@@ -14,7 +14,9 @@ import { DirectionSchema, DetectionSourceSchema } from "./common";
  * Debug lines start with "#" and are ignored by the bridge.
  *
  * Bridge -> device:
- *   {"cmd":"set_limit","kmh":6} | {"cmd":"buzzer_test"} | {"cmd":"ping"}
+ *   {"cmd":"set_limit","kmh":6,"scale":10} | {"cmd":"buzzer_test"} | {"cmd":"ping"}
+ *   (set_limit.scale is optional: the station scale factor, so the LCD can show
+ *   the real-world equivalent speed = gate speed x scale)
  *
  * `boot` is a random uint32 generated at MCU reset; `seq` restarts at 0 for
  * each boot, so (bootId, seq) is the idempotency key.
@@ -64,7 +66,11 @@ export type SerialLine = z.infer<typeof SerialLineSchema>;
 /* ---------------- bridge -> device commands ---------------- */
 
 export const DeviceCommandSchema = z.discriminatedUnion("cmd", [
-  z.object({ cmd: z.literal("set_limit"), kmh: z.number().min(0.1).max(200) }),
+  z.object({
+    cmd: z.literal("set_limit"),
+    kmh: z.number().min(0.1).max(200),
+    scale: z.number().min(0.01).max(1000).optional(),
+  }),
   z.object({ cmd: z.literal("buzzer_test") }),
   z.object({ cmd: z.literal("ping") }),
 ]);

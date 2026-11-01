@@ -16,6 +16,8 @@ export interface BridgeDeps {
   deviceId: string | null;
   /** Server-authoritative limit to push over serial on (re)connect. */
   desiredLimitKmh: number | null;
+  /** station scale factor, sent with set_limit so the LCD shows real-world speed */
+  desiredScale?: number | null;
 }
 
 /**
@@ -186,19 +188,28 @@ export class Bridge {
 
   private pushDesiredLimit(): void {
     if (this.deps.desiredLimitKmh === null) return;
-    this.deps.source.write({ cmd: "set_limit", kmh: this.deps.desiredLimitKmh });
+    const scale = this.deps.desiredScale;
+    this.deps.source.write(
+      scale == null
+        ? { cmd: "set_limit", kmh: this.deps.desiredLimitKmh }
+        : { cmd: "set_limit", kmh: this.deps.desiredLimitKmh, scale }
+    );
   }
 
   /** Server commands arrive over the bridge's device-key socket connection. */
   handleCommand(command: DeviceCommand): void {
-    if (command.cmd === "set_limit") this.deps.desiredLimitKmh = command.kmh;
+    if (command.cmd === "set_limit") {
+      this.deps.desiredLimitKmh = command.kmh;
+      if (command.scale !== undefined) this.deps.desiredScale = command.scale;
+    }
     this.deps.source.write(command);
     this.deps.logger.info({ command }, "command forwarded to device");
   }
 
   /** Records the server's current limit (start of day / reconnect). */
-  setDesiredLimit(kmh: number): void {
+  setDesiredLimit(kmh: number, scale?: number): void {
     this.deps.desiredLimitKmh = kmh;
+    if (scale !== undefined) this.deps.desiredScale = scale;
     if (this.bootId !== null) this.pushDesiredLimit();
   }
 
