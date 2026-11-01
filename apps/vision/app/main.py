@@ -71,12 +71,19 @@ def _check_vision_secret(request: Request, cfg: Config) -> None:
 def create_app(
     cfg: Config | None = None,
     *,
-    camera_type: type[LiveCamera] = LiveCamera,
+    camera_type: type[LiveCamera] | None = None,
     uploader: Uploader | None = None,
     enable_capture: bool = True,
     enable_heartbeat: bool = True,
 ) -> FastAPI:
     cfg = cfg or load_config()
+    if camera_type is None:
+        if (cfg.camera_source or "").lower() == "android":
+            from .android import AndroidCamera
+
+            camera_type = AndroidCamera  # type: ignore[assignment]
+        else:
+            camera_type = LiveCamera
     logger = setup_logging(cfg)
     stats = Stats()
     ring = RingBuffer(max(1, int(cfg.ring_seconds * RING_FPS)))
