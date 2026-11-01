@@ -36,6 +36,15 @@ copy of that contract — change both together.**
   If no detections ever print, flip it to `RISING` (some clones are active-HIGH).
 - LCD address is `0x27`. If the backlight is on but the text is blank, try
   `0x3F` and turn the contrast pot on the LCD backpack.
+- LCD screens: at power-on a **test pattern** for 2 s
+  (`0123456789ABCDEF` / `abcdefghij:./#!?`), then `SmartSpeed <fw>` +
+  the gate limit, then per vehicle:
+  ```
+  Speed:4.8km/h          <- raw gate speed (the dashboard shows it x scale factor)
+  OVERSPEED!   #12       <- OK / OVERSPEED! + vehicles counted since power-on
+  ```
+  The LCD is re-initialised before every redraw so a glitched transfer can't
+  leave it showing garbage.
 - The buzzer needs its (+) on D13 and (−) on GND (this build — the onboard LED
   blinks with it; the original spec used D8); it is driven non-blocking
   (3 × 150 ms beeps, `millis()`-based, never `delay()` in the loop).
@@ -142,6 +151,12 @@ ISRs only store `micros()` and set `volatile` flags — no serial, no LCD, no
 - **Detection then nothing**: lone-sensor timeouts print nothing (by design);
   check both sensors see the beam at the same height.
 - **LCD blank**: `0x27` → `0x3F`, then the contrast pot.
+- **LCD shows wrong / garbled characters**: compare the boot test pattern.
+  If the same characters are wrong every time (e.g. letters wrong but some
+  digits right) a data line is bad — reseat the 4 jumpers (GND, VCC, SDA,
+  SCL) and check the soldering of the 16-pin header between the LCD and its
+  I2C backpack. Random garbage that clears after the next vehicle was a sync
+  glitch, which the firmware now recovers from.
 - **Wrong direction**: swap the two sensor wires (or their pins) — `fwd` is
   defined as A-then-B.
 - **Limit changes are ignored**: the ack line `{"t":"ack","cmd":"set_limit"}`

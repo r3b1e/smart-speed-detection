@@ -18,7 +18,7 @@ static const uint8_t PIN_BUZZER = 13;  // wired to D13 on this build (onboard LE
 static const uint8_t LCD_ADDR = 0x27;  // try 0x3F if the LCD stays blank (see README)
 static const int IR_EDGE = FALLING;    // most IR modules are active-LOW; use RISING if nothing prints
 static const float GATE_DISTANCE_M = 0.10f;
-static const char *FW_VERSION = "1.0.0";
+static const char *FW_VERSION = "1.1.0";
 
 static const unsigned long DEBOUNCE_US = 2000UL;    // ignore re-triggers < 2 ms
 static const unsigned long TIMEOUT_US = 2000000UL;  // lone sensor resets after 2 s
@@ -119,13 +119,41 @@ static void writeLine(uint8_t row, const char *text) {
   for (uint8_t i = (uint8_t)strlen(buf); i < 16; i++) lcd.print(' ');
 }
 
+/** Line 2: status on the left, vehicle count on the right, e.g. "OVERSPEED!   #12". */
+static void statusLine(const char *status, char *out) {
+  char count[8];
+  snprintf(count, sizeof(count), "#%lu", seq);
+  const int pad = 16 - (int)strlen(count);
+  snprintf(out, 17, "%-*.*s%s", pad, pad, status, count);
+}
+
+/**
+ * Re-run the LCD's init sequence before redrawing. The HD44780 talks in 4-bit
+ * nibbles through the I2C backpack; one glitched nibble (loose jumper, noise,
+ * a reset in the middle of a write) shifts every later character and the
+ * screen fills with garbage until power-cycled. init() forces it back into
+ * sync. Costs ~60 ms, only once per vehicle; the ISRs keep timing meanwhile.
+ */
+static void lcdResync() {
+  lcd.init();
+  lcd.backlight();
+}
+
 static void renderLcd() {
   char speedTxt[12];
   char line[17];
+  lcdResync();
   dtostrf(lastSpeedKmh, 0, 1, speedTxt);
   snprintf(line, sizeof(line), "Speed:%skm/h", speedTxt);
   writeLine(0, line);
-  writeLine(1, lastStatus);
+  statusLine(lastStatus, line);
+  writeLine(1, line);
+}
+
+/** Known characters at boot: compare with the LCD to spot a bad data line. */
+static void showTestPattern() {
+  writeLine(0, "0123456789ABCDEF");
+  writeLine(1, "abcdefghij:./#!?");
 }
 
 static void showBootScreen() {
@@ -253,7 +281,7 @@ static void processDetection() {
   const float speed = (GATE_DISTANCE_M * 1000000.0f * 3.6f) / (float)dtUs;
   const bool over = speed > limitKmh;
 
-  seq++; // monotonic per boot: server dedupes on (bootId, seq)
+  seq++; // monotonic per boot: server dedupes on (bootId, seq); also the LCD vehicle count
   emitDetection(dtUs, speed, over);
 
   lastSpeedKmh = speed;
@@ -289,10 +317,15 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_A), isrA, IR_EDGE);
   attachInterrupt(digitalPinToInterrupt(PIN_B), isrB, IR_EDGE);
 
+  showTestPattern();
+  delay(2000); // boot-only delays; ISRs are already capturing
   showBootScreen();
-  delay(1500); // boot screen only; ISRs are already capturing
+  delay(1500);
+  lcdResync();
   writeLine(0, "Speed:--.-km/h");
-  writeLine(1, "Waiting...");
+  char line[17];
+  statusLine("Waiting...", line);
+  writeLine(1, line);
 
   lastHbMs = millis();
 }
