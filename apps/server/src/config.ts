@@ -44,6 +44,10 @@ const EnvSchema = z.object({
   WHATSAPP_TEMPLATE_NAME: z.string().default(""),
   WHATSAPP_TEMPLATE_LANG: z.string().default("en"),
   WHATSAPP_GRAPH_VERSION: z.string().default("v25.0"),
+  /** webhook: Meta's "Verify token" (any secret string, same value in the Meta dashboard) */
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  /** webhook: Meta App secret, used to check X-Hub-Signature-256 on incoming events */
+  WHATSAPP_APP_SECRET: z.string().optional(),
   /** time zone used for times written in notifications */
   NOTIFY_TIMEZONE: z.string().default("Asia/Kolkata"),
   /** dashboard URL reachable from the admin's phone; adds a link to alerts when set */

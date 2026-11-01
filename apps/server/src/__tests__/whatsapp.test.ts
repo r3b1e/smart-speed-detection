@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RegisteredUser, TestCtx } from "./helpers";
 import {
@@ -233,5 +234,65 @@ describe("overspeed photo upload -> WhatsApp alert", () => {
     await uploadFrame(res.body.id);
     await new Promise((r) => setTimeout(r, 100));
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("WhatsApp webhook (Meta callback URL)", () => {
+  let ctx: TestCtx;
+  beforeAll(async () => {
+    ctx = await setupCtx();
+  });
+  afterAll(async () => {
+    await teardownCtx(ctx);
+  });
+
+  const sign = (raw: string, secret: string) =>
+    `sha256=${createHmac("sha256", secret).update(raw).digest("hex")}`;
+
+  it("answers Meta's verification handshake only with the right verify token", async () => {
+    Object.assign(config, { WHATSAPP_VERIFY_TOKEN: "my-verify-token" });
+    const ok = await api(ctx.app).get("/api/webhooks/whatsapp").query({
+      "hub.mode": "subscribe",
+      "hub.verify_token": "my-verify-token",
+      "hub.challenge": "1158201444",
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.text).toBe("1158201444");
+
+    const bad = await api(ctx.app).get("/api/webhooks/whatsapp").query({
+      "hub.mode": "subscribe",
+      "hub.verify_token": "wrong",
+      "hub.challenge": "1158201444",
+    });
+    expect(bad.status).toBe(403);
+  });
+
+  it("accepts signed events and rejects forged ones", async () => {
+    Object.assign(config, { WHATSAPP_APP_SECRET: "app-secret-0123456789" });
+    const raw = JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          changes: [
+            {
+              field: "messages",
+              value: {
+                statuses: [{ id: "wamid.1", status: "delivered", recipient_id: "919800000001" }],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const post = (signature?: string) => {
+      const req = api(ctx.app)
+        .post("/api/webhooks/whatsapp")
+        .set("content-type", "application/json");
+      if (signature) req.set("x-hub-signature-256", signature);
+      return req.send(raw);
+    };
+    expect((await post(sign(raw, "app-secret-0123456789"))).status).toBe(200);
+    expect((await post(sign(raw, "someone-else"))).status).toBe(401);
+    expect((await post()).status).toBe(401);
   });
 });

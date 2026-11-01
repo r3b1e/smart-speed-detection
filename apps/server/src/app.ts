@@ -21,6 +21,7 @@ import { mapRouter } from "./routes/map";
 import { exportRouter } from "./routes/export";
 import { framesRouter } from "./routes/frames";
 import { sessionsRouter } from "./routes/sessions";
+import { whatsappWebhookRouter } from "./routes/whatsappWebhook";
 
 export function createApp(): express.Express {
   const app = express();
@@ -36,6 +37,8 @@ export function createApp(): express.Express {
       credentials: true,
     })
   );
+  // raw body + HMAC signature check: must run before express.json()
+  app.use("/api/webhooks/whatsapp", whatsappWebhookRouter);
   app.use(express.json({ limit: "256kb" }));
   app.use(cookieParser());
   app.use(

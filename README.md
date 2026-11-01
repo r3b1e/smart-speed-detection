@@ -166,6 +166,24 @@ user** in Meta Business Settings and generate a token with the
 > in 24 h, Meta accepts the alert and then silently drops it (error 131047).
 > Quick check: Meta's pre-approved `hello_world` template still arrives.
 
+#### Delivery receipts (optional webhook)
+
+`/api/webhooks/whatsapp` handles Meta's verification handshake and logs
+`whatsapp alert delivered` / `read` / `failed` (with Meta's reason) plus
+incoming admin messages. Event signatures are checked with the app secret.
+Set `WHATSAPP_VERIFY_TOKEN` (any secret string) and `WHATSAPP_APP_SECRET`
+in `apps/server/.env`, then expose **only** that route:
+
+```bash
+pnpm webhook:gateway   # :4100 forwards ONLY /api/webhooks/whatsapp, everything else 404
+pnpm webhook:tunnel    # cloudflared (brew install cloudflared) -> https://<random>.trycloudflare.com
+```
+
+In Meta → WhatsApp → Configuration → Webhook: Callback URL
+`https://<random>.trycloudflare.com/api/webhooks/whatsapp`, Verify token =
+your `WHATSAPP_VERIFY_TOKEN`, then subscribe to the `messages` field. The
+quick-tunnel address changes on every restart (update it in Meta).
+
 ## Tests
 
 ```bash

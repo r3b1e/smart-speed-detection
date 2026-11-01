@@ -14,6 +14,8 @@
     "dev:bridge": "pnpm --filter @smart-speed/bridge dev",
     "dev:vision": "bash scripts/dev-vision.sh",
     "dev:mongo": "node scripts/dev-mongo.mjs",
+    "webhook:gateway": "node scripts/webhook-gateway.mjs",
+    "webhook:tunnel": "cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4100",
     "seed": "pnpm --filter @smart-speed/shared build && pnpm --filter @smart-speed/server seed",
     "test": "pnpm --filter @smart-speed/shared test && pnpm --filter @smart-speed/server test && pnpm --filter @smart-speed/bridge test && pnpm test:vision && pnpm --filter @smart-speed/web test",
     "test:vision": "cd apps/vision && (test -x .venv/bin/pytest && .venv/bin/pytest || echo \"[vision] venv missing — see apps/vision/README (python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt)\")",
