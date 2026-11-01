@@ -31,6 +31,23 @@ const EnvSchema = z.object({
     .string()
     .transform((v) => v === "true")
     .default("false"),
+  // WhatsApp overspeed alerts via Meta WhatsApp Cloud API (optional)
+  WHATSAPP_ENABLED: z
+    .string()
+    .transform((v) => v === "true")
+    .default("false"),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  /** comma-separated recipients, international format digits, e.g. 919876543210 */
+  WHATSAPP_ADMIN_NUMBERS: z.string().default(""),
+  /** approved template with an IMAGE header (works outside the 24 h window); empty = plain image message */
+  WHATSAPP_TEMPLATE_NAME: z.string().default(""),
+  WHATSAPP_TEMPLATE_LANG: z.string().default("en"),
+  WHATSAPP_GRAPH_VERSION: z.string().default("v25.0"),
+  /** time zone used for times written in notifications */
+  NOTIFY_TIMEZONE: z.string().default("Asia/Kolkata"),
+  /** dashboard URL reachable from the admin's phone; adds a link to alerts when set */
+  PUBLIC_WEB_URL: z.string().url().optional(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

@@ -6,6 +6,7 @@ import { toPublicDevice } from "../models";
 import { logger } from "../logger";
 import { sockets } from "./sockets";
 import { closeInactiveSessions } from "./sessions";
+import { notifyOverspeed } from "./whatsapp";
 
 const HEARTBEAT_TIMEOUT_MS = 15_000;
 
@@ -149,6 +150,7 @@ async function failStaleFrames(): Promise<void> {
   for (const doc of stale) {
     doc.frame.status = "failed";
     await doc.save();
+    notifyOverspeed(doc.id, null);
     sockets.detectionFrame({
       detectionId: doc.id,
       status: "failed",

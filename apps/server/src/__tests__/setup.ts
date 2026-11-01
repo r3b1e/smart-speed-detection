@@ -7,3 +7,10 @@ process.env.LOG_LEVEL = "silent";
 process.env.JWT_ACCESS_SECRET = "test-access-secret-please-be-long";
 process.env.JWT_REFRESH_SECRET = "test-refresh-secret-please-be-long";
 process.env.MONGODB_URI = "mongodb://127.0.0.1:9/ignored-in-tests";
+// Never message a real phone from tests, even when apps/server/.env holds live
+// WhatsApp credentials (dotenv does not override variables already set here).
+process.env.WHATSAPP_ENABLED = "false";
+process.env.WHATSAPP_ACCESS_TOKEN = "";
+process.env.WHATSAPP_ADMIN_NUMBERS = "";
+process.env.WHATSAPP_APP_SECRET = "";
+process.env.WHATSAPP_VERIFY_TOKEN = "";

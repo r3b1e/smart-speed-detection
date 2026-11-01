@@ -121,6 +121,51 @@ In MongoDB **GridFS**, bucket `frames` (`<detectionId>.jpg` + `.thumb.jpg`),
 linked from `detection.frame.fileId`. Only overspeed detections get a photo.
 View them on the Dashboard (Overspeed evidence) or Detections page.
 
+### WhatsApp alerts (optional)
+
+Every overspeed vehicle sends the admin(s) a WhatsApp message with the
+camera photo and a caption: speed, limit, % over, severity, direction,
+station and time. If the photo could not be captured, a text-only alert is
+sent instead, so no violation goes unreported. Uses the official **Meta
+WhatsApp Cloud API** (free at this volume); code in
+`apps/server/src/services/whatsapp.ts`. A WhatsApp failure is only logged —
+detections are never affected.
+
+1. Go to <https://developers.facebook.com> → **My Apps → Create app** →
+   use case _Connect with customers through WhatsApp_ (type Business).
+2. In the app: **WhatsApp → API Setup**. Copy the **temporary access token**
+   and the **Phone number ID** of the free test number.
+3. Under **To**, add the admin's WhatsApp number and confirm the code
+   WhatsApp sends to it (the test number can message up to 5 numbers).
+4. In `apps/server/.env` set:
+   ```
+   WHATSAPP_ENABLED=true
+   WHATSAPP_ACCESS_TOKEN=<token>
+   WHATSAPP_PHONE_NUMBER_ID=<phone number id>
+   WHATSAPP_ADMIN_NUMBERS=919876543210      # country code + number, comma-separate several
+   ```
+   and restart the server (`pnpm dev`).
+5. **From the admin's phone, send any message (e.g. "hi") to the test
+   number.** WhatsApp only lets a business send free-form messages within
+   24 h of the user's last message — repeat this before each demo day.
+
+To avoid the 24 h rule, create an approved template instead
+(WhatsApp Manager → Message templates → Create): category **Utility**, name
+`overspeed_alert`, language English, header **Media → Image**, body e.g.
+`Overspeed alert: {{1}} km/h (limit {{2}} km/h, {{3}} over) at {{4}} on {{5}}.`
+Once approved set `WHATSAPP_TEMPLATE_NAME=overspeed_alert`. Variables are
+filled as: speed, limit, % over, station, time.
+
+The temporary token expires after 24 h; for a lasting one create a **System
+user** in Meta Business Settings and generate a token with the
+`whatsapp_business_messaging` permission. Server log lines
+`whatsapp alert sent` / `whatsapp alert not delivered` (with a hint for the
+24 h error) show what happened.
+
+> **"Accepted" is not "delivered".** If the admin hasn't messaged the number
+> in 24 h, Meta accepts the alert and then silently drops it (error 131047).
+> Quick check: Meta's pre-approved `hello_world` template still arrives.
+
 ## Tests
 
 ```bash

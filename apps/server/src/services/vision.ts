@@ -2,6 +2,7 @@ import { config } from "../config";
 import { logger } from "../logger";
 import { Detection } from "../models";
 import { sockets } from "./sockets";
+import { notifyOverspeed } from "./whatsapp";
 
 /** While vision is unreachable we log one warning, then stay quiet until it recovers. */
 let downSince: number | null = null;
@@ -17,6 +18,7 @@ async function markCaptureFailed(detectionId: string): Promise<void> {
     if (!detection || detection.frame.status !== "pending") return;
     detection.frame.status = "failed";
     await detection.save();
+    notifyOverspeed(detectionId, null); // text-only alert: the violation still gets reported
     sockets.detectionFrame({
       detectionId,
       status: "failed",

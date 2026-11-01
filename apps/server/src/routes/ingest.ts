@@ -27,6 +27,7 @@ import { recordHeartbeat } from "../services/health";
 import { getOrCreateSession, updateSessionStats } from "../services/sessions";
 import { sockets } from "../services/sockets";
 import { triggerCapture } from "../services/vision";
+import { notifyOverspeed } from "../services/whatsapp";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -226,6 +227,7 @@ ingestRouter.post(
       status: "ready",
     };
     await detection.save();
+    notifyOverspeed(detection.id, frameFile.buffer); // WhatsApp photo alert (no-op unless configured)
 
     const frameUrl = `${config.PUBLIC_SERVER_URL}/api/frames/${stored.id}`;
     const thumbUrl = `${config.PUBLIC_SERVER_URL}/api/frames/${thumb.id}`;

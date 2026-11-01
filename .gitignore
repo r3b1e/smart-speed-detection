@@ -12,6 +12,9 @@ coverage/
 !.env.example
 *.pem
 *.key
+# credential notes (e.g. apps/server/whatsapp_cred.txt)
+*cred*.txt
+*secret*.txt
 
 # ── python (vision service) ──────────────────────────────────────────────────
 .venv/
