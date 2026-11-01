@@ -121,6 +121,9 @@ export const useLive = create<LiveState>((set, get) => {
                 frame: {
                   ...d.frame,
                   status: payload.status,
+                  // frameImageUrl() accepts either a file id or a URL
+                  fileId: payload.frameUrl ?? d.frame.fileId,
+                  thumbFileId: payload.thumbUrl ?? d.frame.thumbFileId,
                   capturedAt: payload.capturedAt ?? d.frame.capturedAt,
                 },
               }
