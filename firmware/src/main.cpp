@@ -14,7 +14,7 @@
 /* ---------------- constants (spec: firmware section) ---------------- */
 static const uint8_t PIN_A = 2;        // IR sensor A -> INT0
 static const uint8_t PIN_B = 3;        // IR sensor B -> INT1
-static const uint8_t PIN_BUZZER = 8;
+static const uint8_t PIN_BUZZER = 13;  // wired to D13 on this build (onboard LED blinks with it)
 static const uint8_t LCD_ADDR = 0x27;  // try 0x3F if the LCD stays blank (see README)
 static const int IR_EDGE = FALLING;    // most IR modules are active-LOW; use RISING if nothing prints
 static const float GATE_DISTANCE_M = 0.10f;
@@ -272,6 +272,8 @@ static void heartbeatDue() {
 /* ---------------- Arduino entry points ---------------- */
 void setup() {
   Serial.begin(115200);
+  pinMode(PIN_A, INPUT_PULLUP); // matches the original sketch; IR OUT is active-LOW
+  pinMode(PIN_B, INPUT_PULLUP);
   pinMode(PIN_BUZZER, OUTPUT);
   digitalWrite(PIN_BUZZER, LOW);
 

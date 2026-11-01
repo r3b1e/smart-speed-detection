@@ -14,7 +14,7 @@ copy of that contract — change both together.**
       ┌──────────────┐                    ┌──────────┐
       │          D2  ├───────────────────►│ OUT      │  VCC ──► 5V
       │          D3  ├───────┬───────────►│ OUT      │  GND ──► GND
-      │          D8  │       │            └──────────┘
+      │          D13 │       │            └──────────┘
       │              │       │            IR sensor B (far side)
       │          5V  ├──┬────┴──┬───────  VCC/GND (same rail)
       │          GND ├──┘       │        ┌──────────┐
@@ -27,7 +27,7 @@ copy of that contract — change both together.**
              ▼                            ┌────┴─────┐
            Mac host                      │  IR A : D2 (INT0)
            (bridge)                      │  IR B : D3 (INT1)
-                                         │  Buzzer (+) : D8  (− : GND)
+                                         │  Buzzer (+) : D13 (− : GND)
                                          │  LCD I2C : SDA/SCL (A4/A5)
                                          └──────────┘
 ```
@@ -36,7 +36,8 @@ copy of that contract — change both together.**
   If no detections ever print, flip it to `RISING` (some clones are active-HIGH).
 - LCD address is `0x27`. If the backlight is on but the text is blank, try
   `0x3F` and turn the contrast pot on the LCD backpack.
-- The buzzer needs its (+) on D8 and (−) on GND; it is driven non-blocking
+- The buzzer needs its (+) on D13 and (−) on GND (this build — the onboard LED
+  blinks with it; the original spec used D8); it is driven non-blocking
   (3 × 150 ms beeps, `millis()`-based, never `delay()` in the loop).
 
 ## Build & flash
