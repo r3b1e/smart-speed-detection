@@ -9,6 +9,8 @@ alert and get a **phone-camera snapshot** stored with the detection.
 - Detections table with photo drawer, review workflow, CSV/PDF export
 - Live map, analytics, camera preview, three roles (admin / authority / user)
 
+> **Already set up? Just want to run it? → [RUN.md](RUN.md)** (commands only, start to finish).
+>
 > `prompt.md` is the original full specification the project was built from.
 
 ## How it works
