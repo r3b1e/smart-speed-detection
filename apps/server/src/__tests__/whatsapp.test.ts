@@ -17,6 +17,8 @@ import {
   resetWhatsAppDedupe,
   sendOverspeedAlert,
   setWhatsAppFetch,
+  setWhatsAppRetryDelays,
+  describeError,
   type OverspeedFacts,
 } from "../services/whatsapp";
 
@@ -86,7 +88,10 @@ async function until(check: () => boolean, label: string): Promise<void> {
   }
 }
 
+beforeEach(() => setWhatsAppRetryDelays([0, 0])); // retries without real waiting
+
 afterEach(() => {
+  setWhatsAppRetryDelays([1_000, 3_000]);
   Object.assign(config, saved);
   setWhatsAppFetch(null);
   resetWhatsAppDedupe();
@@ -163,6 +168,50 @@ describe("sendOverspeedAlert", () => {
     enableWhatsApp();
     fakeGraph({ messages: { code: 131047, message: "Re-engagement message" } });
     await expect(sendOverspeedAlert(facts, TINY_JPEG)).resolves.toBe(0);
+  });
+});
+
+describe("network hiccups", () => {
+  /** Fails the first `failures` calls like undici does ("fetch failed" + cause), then works. */
+  function flakyGraph(failures: number) {
+    let n = 0;
+    const calls: string[] = [];
+    const fn = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      n += 1;
+      if (n <= failures) {
+        throw new TypeError("fetch failed", { cause: { code: "ECONNRESET" } });
+      }
+      calls.push(url);
+      return url.endsWith("/media")
+        ? Response.json({ id: "media-123" })
+        : Response.json({ messages: [{ id: "wamid.x" }] });
+    });
+    setWhatsAppFetch(fn as unknown as typeof fetch);
+    return { fn, calls };
+  }
+
+  it("retries a dropped connection and still delivers the photo alert", async () => {
+    enableWhatsApp();
+    const { fn, calls } = flakyGraph(2); // upload fails twice, 3rd attempt works
+    await expect(sendOverspeedAlert(facts, TINY_JPEG)).resolves.toBe(1);
+    expect(fn).toHaveBeenCalledTimes(4); // 3 upload attempts + 1 message
+    expect(calls.map((u) => u.split("/").pop())).toEqual(["media", "messages"]);
+  });
+
+  it("gives up after the last retry with the real cause in the error", async () => {
+    enableWhatsApp();
+    const { fn } = flakyGraph(99);
+    const err = await sendOverspeedAlert(facts, TINY_JPEG).catch((e: unknown) => e);
+    expect(fn).toHaveBeenCalledTimes(3); // first try + 2 retries
+    expect(describeError(err)).toBe("fetch failed (ECONNRESET)");
+  });
+
+  it("does not retry a request Meta rejected (4xx)", async () => {
+    enableWhatsApp();
+    const calls = fakeGraph({ messages: { code: 131047, message: "Re-engagement message" } });
+    await sendOverspeedAlert(facts, TINY_JPEG);
+    expect(calls).toHaveLength(2); // 1 upload + 1 message attempt, no retries
   });
 });
 

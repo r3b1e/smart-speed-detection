@@ -92,7 +92,8 @@ export function overspeedCaption(f: OverspeedFacts, withPhoto: boolean): string 
 class WhatsAppError extends Error {
   constructor(
     message: string,
-    readonly code?: number
+    readonly code?: number,
+    readonly status?: number
   ) {
     super(message);
   }
@@ -102,7 +103,30 @@ function graphUrl(path: string): string {
   return `https://graph.facebook.com/${config.WHATSAPP_GRAPH_VERSION}/${config.WHATSAPP_PHONE_NUMBER_ID}/${path}`;
 }
 
-async function graphCall(path: string, init: RequestInit): Promise<Record<string, unknown>> {
+/** Delays before retry #1, #2 … ; network blips (Wi-Fi drop, DNS hiccup) usually pass in seconds. */
+let retryDelaysMs = [1_000, 3_000];
+
+/** Test hook: shorten retry delays. */
+export function setWhatsAppRetryDelays(delays: number[]): void {
+  retryDelaysMs = delays;
+}
+
+/** "fetch failed" hides the real reason (ECONNRESET, ENOTFOUND, timeout…) in err.cause. */
+export function describeError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = err.cause as { code?: string; message?: string } | undefined;
+  const detail = cause?.code ?? cause?.message;
+  return detail ? `${err.message} (${detail})` : err.message;
+}
+
+/** Network errors and Meta 5xx/429 are worth retrying; other HTTP errors are final. */
+function retryable(err: unknown): boolean {
+  if (err instanceof WhatsAppError)
+    return err.status === undefined || err.status >= 500 || err.status === 429;
+  return true; // fetch failed / timeout / connection reset
+}
+
+async function graphCallOnce(path: string, init: RequestInit): Promise<Record<string, unknown>> {
   const res = await fetchImpl(graphUrl(path), {
     ...init,
     headers: { authorization: `Bearer ${config.WHATSAPP_ACCESS_TOKEN}`, ...init.headers },
@@ -111,9 +135,25 @@ async function graphCall(path: string, init: RequestInit): Promise<Record<string
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     const err = (body.error ?? {}) as { message?: string; code?: number };
-    throw new WhatsAppError(err.message ?? `HTTP ${res.status}`, err.code);
+    throw new WhatsAppError(err.message ?? `HTTP ${res.status}`, err.code, res.status);
   }
   return body;
+}
+
+async function graphCall(path: string, init: RequestInit): Promise<Record<string, unknown>> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await graphCallOnce(path, init);
+    } catch (err) {
+      const delay = retryDelaysMs[attempt];
+      if (delay === undefined || !retryable(err)) throw err;
+      logger.info(
+        { call: path, attempt: attempt + 1, err: describeError(err), retryInMs: delay },
+        "whatsapp request failed, retrying"
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
 
 /** Uploads the JPEG once; the returned media id is reused for every recipient. */
@@ -181,7 +221,7 @@ export async function sendOverspeedAlert(f: OverspeedFacts, jpeg: Buffer | null)
         {
           to: `…${to.slice(-4)}`,
           code: e.code,
-          err: e.message,
+          err: describeError(e),
           hint:
             e.code === 131047 || e.code === 131026
               ? "outside the 24 h window: admin must message the WhatsApp number first, or set WHATSAPP_TEMPLATE_NAME"
@@ -242,9 +282,6 @@ export function notifyOverspeed(detectionId: string, jpeg: Buffer | null): void 
     const sent = await sendOverspeedAlert(facts, jpeg);
     if (sent > 0) logger.info({ detectionId, kind, recipients: sent }, "whatsapp alert sent");
   })().catch((err: unknown) => {
-    logger.warn(
-      { detectionId, err: err instanceof Error ? err.message : String(err) },
-      "whatsapp alert failed"
-    );
+    logger.warn({ detectionId, err: describeError(err) }, "whatsapp alert failed");
   });
 }
